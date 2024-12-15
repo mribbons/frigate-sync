@@ -1,0 +1,17 @@
+{
+  "name": "frigate-extract",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "sync": "ts-node src/index.ts",
+    "sync_dev": "nodemon -e ts src/index.ts"
+  },
+  "dependencies": {
+    "@dotenvx/dotenvx": "^1.31.0",
+    "@types/node": "^22.10.2",
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}

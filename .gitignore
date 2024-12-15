@@ -1,0 +1,7 @@
+clips
+events
+snapshots
+thumbnails
+node_modules
+.DS_Store
+.env
