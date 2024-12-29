@@ -1,10 +1,14 @@
 // usage: npx nodemon -e "ts" src/index.ts
 import { config } from '@dotenvx/dotenvx'
 import fs from 'node:fs'
+import { execSync } from 'node:child_process'
 
 config()
 
 const FRIGATE_SERVER = process.env.FRIGATE_SERVER
+const TIMEZONE = process.env.TIMEZONE
+const FFMPEG = process.env.FFMPEG
+const FROM_DAYS_AGO = parseInt(process.env.FROM_DAYS_AGO ?? "14")
 
 if (!FRIGATE_SERVER) {
     console.log(`configure FRIGATE_SERVER in .env`)
@@ -39,6 +43,20 @@ const getUrlToFile = async (url: string, folder: string, filename: string, heade
     fs.writeFileSync(outputPath, new Uint8Array(buffer), { encoding: 'binary' } )
 }
 
+const getFFmpegToFile = async (url: string, folder: string, filename: string, headers?: Record<string, string>): Promise<void> => {
+    
+    let outputPath = [folder, filename].join('/')
+
+    if (exists(outputPath))
+        return
+
+    console.log(`get ${outputPath}`)
+    fs.mkdirSync(folder, { recursive: true })
+
+    execSync(`${FFMPEG} -i ${url} -c copy ${outputPath}`)
+
+}
+
 const getThumbnail = async (event: FrigateEvent) => {
     await getUrlToFile(`${FRIGATE_SERVER}/api/events/${event.id}/thumbnail.jpg`, `thumbnails`,  `${event.id}.jpg`, {
         "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
@@ -66,8 +84,44 @@ const getClip = async (event: FrigateEvent) => {
     await getUrlToFile(`${FRIGATE_SERVER}/api/events/${event.id}/clip.mp4?download=true`, `clips`, `${event.id}.mp4`)
 }
 
+const delay = async(timeout: number): Promise<void> => {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            resolve()
+        }, timeout);
+    })
+}
+
+const getRecordings = async (fromDaysAgo: number) => {
+    let start = Date.now() - (fromDaysAgo * 86400000)
+
+    for (let day = 0; day < fromDaysAgo; day++) {
+        for (let hour = 0; hour < 24; hour++) {
+            let date = new Date(start)
+
+            let date_formatted = `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`
+            let hours_formatted = date.getHours().toString().padStart(2, '0')
+            let path = `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}.${hours_formatted}.ts` // script will restart in dev mode
+
+            let recordingUrl = `${FRIGATE_SERVER}/vod/${date_formatted}/${hours_formatted}/side/Australia,Sydney/master.m3u8`
+
+            console.log(`recording url: ${recordingUrl}`)
+            if (start < Date.now()) {
+                try {
+                    await getFFmpegToFile(recordingUrl, `recordings`, path)
+                } catch (e) {
+                    console.error(e)
+                    await delay(200)
+                }
+            }
+
+            start += 3600000
+        }
+    }
+}
+
 const main = async (argv: string[]) => {
-    let eventsUrl = `${FRIGATE_SERVER}/api/events?cameras=all&labels=all&zones=all&sub_labels=all&time_range=00:00,24:00&timezone=Australia%2FSydney&favorites=0&is_submitted=-1&in_progress=0&include_thumbnails=0&limit=1000`
+    let eventsUrl = `${FRIGATE_SERVER}/api/events?cameras=all&labels=all&zones=all&sub_labels=all&time_range=00:00,24:00&timezone=${TIMEZONE}&favorites=0&is_submitted=-1&in_progress=0&include_thumbnails=0&limit=1000`
 
     let eventsResponse = await fetch(eventsUrl)
     
@@ -90,6 +144,12 @@ const main = async (argv: string[]) => {
             console.error(e)
         }
         // break
+    }
+
+    try {
+        await getRecordings(FROM_DAYS_AGO)
+    } catch (e) {
+        console.error(e)
     }
 }
 
