@@ -94,6 +94,7 @@ const delay = async(timeout: number): Promise<void> => {
 
 const getRecordings = async (fromDaysAgo: number) => {
     let start = Date.now() - (fromDaysAgo * 86400000)
+    let hour_as_ms = 3600000
 
     for (let day = 0; day < fromDaysAgo; day++) {
         for (let hour = 0; hour < 24; hour++) {
@@ -106,7 +107,7 @@ const getRecordings = async (fromDaysAgo: number) => {
             let recordingUrl = `${FRIGATE_SERVER}/vod/${date_formatted}/${hours_formatted}/side/Australia,Sydney/master.m3u8`
 
             console.log(`recording url: ${recordingUrl}`)
-            if (start < Date.now()) {
+            if (start < Date.now() - hour_as_ms) {
                 try {
                     await getFFmpegToFile(recordingUrl, `recordings`, path)
                 } catch (e) {
@@ -115,7 +116,7 @@ const getRecordings = async (fromDaysAgo: number) => {
                 }
             }
 
-            start += 3600000
+            start += hour_as_ms
         }
     }
 }
